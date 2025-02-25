@@ -1,0 +1,35 @@
+{
+  "idle": [
+    {
+      "id": 1643320,
+      "name": "S.T.A.L.K.E.R.2: Heart of Chornobyl"
+    },
+    {
+      "id": 4500,
+      "name": "S.T.A.L.K.E.R.2: Shadow of Chernobyl"
+    }
+  ],
+  "ignore": [
+    {
+      "id": 306130,
+      "name": "The Elder Scrolls Online"
+    },
+    {
+      "id": 1422450,
+      "name": "Deadlock"
+    },
+    {
+      "id": 221100,
+      "name": "DayZ"
+    },
+    {
+      "id": 311210,
+      "name": "Call of Duty: Black Ops III"
+    },
+    {
+      "id": 227300,
+      "name": "Euro Truck Simulator 2"
+    }
+  ]
+}
+
