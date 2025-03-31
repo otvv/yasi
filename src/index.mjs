@@ -1,20 +1,23 @@
 /*
  */
 
-// import dependencies
 import SteamUser from "steam-user";
 import tanjun from "tanjun-log";
 import gamesJSON from "./games.json" with { type: 'json' }; // I know that I should use 'assert' instead of 'with'
                                                             // but well... blame node.js.
-// games to idle
+// games to idle object
 const gamesToIdle = gamesJSON.idle;
 
-// constants
 const USERNAME_IDX = 0;
 const PASSWORD_IDX = 1;
 const EXPONENTIAL_BCKOFF = 5000;
 
 const handleCleanup = (steamClient) => {
+  if (!steamClient) {
+    tanjun.crash("steamClient API has not been initialized properly.", "yasi-bot", "error", "!!");
+    return;
+  }
+
   const cleanup = () => {
     tanjun.print("shutting down...", "yasi-bot", "warning", "!");
     
@@ -22,7 +25,6 @@ const handleCleanup = (steamClient) => {
     steamClient.gamesPlayed([]);
     steamClient.logOff();
 
-    // exit bot
     process.exit(0);
   };
 
@@ -35,15 +37,13 @@ const handleCleanup = (steamClient) => {
 const logIn = (steamClient, loginPayload, idleCallback) => {
   if (loginPayload.length === 0 || (!loginPayload[USERNAME_IDX] || !loginPayload[PASSWORD_IDX])) {
     tanjun.crash("empty login payload.", "yasi-bot", "fatal", false, "!!!");
-    
-    // exit bot
     process.exit(1);
   }
 
   steamClient.on('steamGuard', (_domain, callback) => {
     tanjun.print(`steam guard code needed, please type it below:`, "yasi-bot", "warning", "!");
     
-    // replace this with a proper prompt in the future
+    // TODO: replace this with a proper prompt in the future
     process.stdin.resume();
     process.stdin.once('data', (data) => {
       callback(data.toString().trim());
@@ -91,36 +91,30 @@ const idleGames = (steamClient, gamesArr) => {
           accountName: process.argv[2],
           password: process.argv[3],
         });
-      }, EXPONENTIAL_BCKOFF * reconnectAttempts); // exponential backoff
+      }, EXPONENTIAL_BCKOFF * reconnectAttempts);
     } else {
       tanjun.print("max reconnection attempts reached. shutting down.", "yasi-bot", "error", "!!");
-
-      // exit bot
       process.exit(1);
     }
   });
 };
 
-(function main() {
+(() =>  {
   try { 
     // init steam client wrapper api
     const steamClient = new SteamUser();
     
-    // handle bot cleanup process when closing
     handleCleanup(steamClient);
 
-    // pass login info
+    // parse login info
     const loginPayload = [process.argv[2], process.argv[3]];
     
-    // perform user login
     logIn(steamClient, loginPayload);
     
     // start idling games
     idleGames(steamClient, gamesToIdle);
   } catch (e) {
     tanjun.crash(`unexpected error: ${e}`, "yasi-bot", "fatal", false, "!!!");
-
-    // exit bot on throw
     process.exit(1);
   }
 })();
