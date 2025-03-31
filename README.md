@@ -41,7 +41,7 @@ npm start
     },
     {
       "id": 4500,
-      "name": "S.T.A.L.K.E.R.2: Shadow of Chernobyl"
+      "name": "S.T.A.L.K.E.R.: Shadow of Chernobyl"
     }
   ],
   "ignore": [ // reference only, you can interpret it as a "backup" of sorts
