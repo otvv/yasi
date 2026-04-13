@@ -3,13 +3,9 @@ _(yet another steam idler bot)_
 
 a very simple bot that allows you to idle multiple steam games simultaneously to accumulate playtime hours.
 
-## tech stack
-- node.js
-- npm
-
 ## npm packages used
 - [`steam-user`](https://www.npmjs.com/package/steam-user) - steam client API wrapper for node.js
-- [`tanjun-log`](https://www.npmjs.com/package/tanjun-log) - simple logging utility
+- [`tanjun-log`](https://www.npmjs.com/package/tanjun-log) - simple logging wrapper utility made by me
 
 ## features
 - multi-game idling
