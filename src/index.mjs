@@ -11,7 +11,8 @@ const gamesToIdle = gamesJSON.idle;
 
 const USERNAME_IDX = 0;
 const PASSWORD_IDX = 1;
-const EXPONENTIAL_BCKOFF = 5000;
+const EXPONENTIAL_BCKOFF_TIMER = 5000; // 5 seconds
+const RATELIMIT_TIMER = (10 * 60 * 1000) // 10 minutes
 const TIMEOUT_TIME = 10000;
 const WEBSERVER_PORT = 1337;
 
@@ -42,6 +43,24 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
     tanjun.crash("empty login payload.", "yasi-bot", "fatal", false, "!!!");
     process.exit(1);
   }
+
+  // handle rate-limit
+  steamClient.on("error", (e) => {
+    tanjun.print(`steam client error: ${e.message || e}`, "yasi-bot", "error", "!!");
+
+    if (e.eresult === SteamUser.EResult.RateLimitExceeded) {
+      tanjun.print("rate limited by steam, waiting before retrying", "yasi-bot", "error", "!!");
+      setTimeout(
+        () => {
+          steamClient.logOn({
+            accountName: loginPayload[USERNAME_IDX],
+            password: loginPayload[PASSWORD_IDX],
+          });
+        },
+        RATELIMIT_TIMER,
+      ); 
+    }
+  });
 
   steamClient.on("steamGuard", (_domain, callback) => {
     tanjun.print(
@@ -87,6 +106,7 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
       if (!steamGuardCode) {
         res.send("[yasi-bot] - invalid code, please type it again. (RELOAD THE PAGE)");
         tanjun.print("invalid code, please type it again (RELOAD THE PAGE)", "yasi-bot", "warning", "!");
+        return;
       }
 
       res.send("[yasi-bot] - code received. you can close this page now.");
@@ -99,7 +119,7 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
       setTimeout(
         () =>
           server.close((_err) => {
-            tanjun.print("closing temporary web server", "yasi-bot", "warning", "!");
+            tanjun.print("stopping web server from receiving new connections", "yasi-bot", "warning", "!");
           }),
         TIMEOUT_TIME,
       );
@@ -112,7 +132,7 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
   });
 };
 
-const idleGames = (steamClient, gamesArr) => {
+const idleGames = (steamClient, gamesArr, loginPayload) => {
   if (!Array.isArray(gamesArr) || gamesArr.length === 0) {
     tanjun.print("no games provided for idling", "yasi-bot", "warning", "!");
     return;
@@ -144,10 +164,10 @@ const idleGames = (steamClient, gamesArr) => {
       
       setTimeout(() => {
         steamClient.logOn({
-          accountName: process.argv[2],
-          password: process.argv[3],
+          accountName: loginPayload[USERNAME_IDX],
+          password: loginPayload[PASSWORD_IDX],
         });
-      }, EXPONENTIAL_BCKOFF * reconnectAttempts);
+      }, EXPONENTIAL_BCKOFF_TIMER * 2 ** reconnectAttempts);
     } else {
       tanjun.print("max reconnection attempts reached. shutting down.", "yasi-bot", "error", "!!");
       process.exit(1);
@@ -168,7 +188,7 @@ const idleGames = (steamClient, gamesArr) => {
     logIn(steamClient, loginPayload);
     
     // start idling games
-    idleGames(steamClient, gamesToIdle);
+    idleGames(steamClient, gamesToIdle, loginPayload);
   } catch (e) {
     tanjun.crash(`unexpected error: ${e}`, "yasi-bot", "fatal", false, "!!!");
     process.exit(1);
