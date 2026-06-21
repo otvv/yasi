@@ -12,7 +12,7 @@ const gamesToIdle = gamesJSON.idle;
 const USERNAME_IDX = 0;
 const PASSWORD_IDX = 1;
 const EXPONENTIAL_BCKOFF = 5000;
-const TIMEOUT_TIME = 5000;
+const TIMEOUT_TIME = 10000;
 const WEBSERVER_PORT = 1337;
 
 const handleCleanup = (steamClient) => {
@@ -43,22 +43,32 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
     process.exit(1);
   }
 
-  steamClient.on('steamGuard', (_domain, callback) => {
-    tanjun.print(`steam guard code needed, please visit: http://localhost:${WEBSERVER_PORT} to enter it.`, "yasi-bot", "warning", "!");
-    
+  steamClient.on("steamGuard", (_domain, callback) => {
+    tanjun.print(
+      `steam guard code needed, please visit: http://localhost:${WEBSERVER_PORT} to enter it.`,
+      "yasi-bot",
+      "warning",
+      "!",
+    );
+
     let steamGuardCode = null;
 
     // initialize web server
     const app = express();
     app.use(express.urlencoded({ extended: true }));
 
-    app.listen(WEBSERVER_PORT, () => {
-      tanjun.print(`web interface ready @ http://localhost:${WEBSERVER_PORT}`, "yasi-bot", "success", "->")
+    let server = app.listen(WEBSERVER_PORT, () => {
+      tanjun.print(
+        `web interface ready @ http://localhost:${WEBSERVER_PORT}`,
+        "yasi-bot",
+        "success",
+        "->",
+      );
     });
 
     // create steam guard code prompt
     // TODO: stylize it at some point
-    app.get('/', (_req, res) => {
+    app.get("/", (_req, res) => {
       res.send(`
         <form method="POST">
           <label>Steam Guard Code:</label>
@@ -68,26 +78,31 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
       `);
     });
 
-    // after the user types the steam-guard 
-    // code in the prompt send it back to yasi bot 
-    app.post('/', (req, res) => {
+    // after the user types the steam-guard
+    // code in the prompt send it back to yasi bot
+    app.post("/", (req, res) => {
       // get typed-in code from request
       steamGuardCode = req.body.code;
 
       if (!steamGuardCode) {
-        res.send('[yasi-bot] - invalid code, please type it again. (RELOAD THE PAGE)');
+        res.send("[yasi-bot] - invalid code, please type it again. (RELOAD THE PAGE)");
         tanjun.print("invalid code, please type it again (RELOAD THE PAGE)", "yasi-bot", "warning", "!");
       }
 
-      res.send('[yasi-bot] - code received. you can close this page now.');
-      tanjun.print("invalid code, please type it again (RELOAD THE PAGE)", "yasi-bot", "warning", "!");
-
+      res.send("[yasi-bot] - code received. you can close this page now.");
+      tanjun.print("code received, you can close this page now", "yasi-bot", "success", "->");
 
       // send code back to yasibot
       callback(steamGuardCode);
 
-      // auto exit after 5 seconds
-       setTimeout(() => process.exit(0), TIMEOUT_TIME);
+      // close web server after 10 seconds
+      setTimeout(
+        () =>
+          server.close((_err) => {
+            tanjun.print("closing temporary web server", "yasi-bot", "warning", "!");
+          }),
+        TIMEOUT_TIME,
+      );
     });
   });
 
