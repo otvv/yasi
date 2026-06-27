@@ -4,11 +4,18 @@
 import express from 'express';
 import SteamUser from "steam-user";
 import tanjun from "tanjun-log";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import gamesJSON from "./games.json" with { type: 'json' }; // I know that I should use 'assert' instead of 'with'
                                                             // but well... blame node.js.
+// 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 // games to idle object
 const gamesToIdle = gamesJSON.idle;
 
+const VIEWS_DIR = path.join(__dirname, "views");
 const USERNAME_IDX = 0;
 const PASSWORD_IDX = 1;
 const EXPONENTIAL_BCKOFF_TIMER = 5000; // 5 seconds
@@ -16,16 +23,39 @@ const RATELIMIT_TIMER = (10 * 60 * 1000) // 10 minutes
 const TIMEOUT_TIME = 10000;
 const WEBSERVER_PORT = 1337;
 
+
+const renderView = (viewName, replacements = {}) => {
+  const templatePath = path.join(VIEWS_DIR, viewName);
+  let html = fs.readFileSync(templatePath, "utf-8");
+
+  for (const [token, value] of Object.entries(replacements)) {
+    html = html.replaceAll(`{{${token}}}`, value);
+  }
+
+  return html;
+};
+
+const renderGuardForm = (errorMsg) => renderView("guard-form.html", {
+  PORT: WEBSERVER_PORT,
+  STATUS_DOT_CLASS: errorMsg ? "error" : "live",
+  STATUS_LINE_CLASS: errorMsg ? "error" : "",
+  STATUS_MESSAGE: errorMsg ? errorMsg : "waiting for steam guard code",
+});
+
+const renderGuardSuccess = () => renderView("guard-success.html", {
+  PORT: WEBSERVER_PORT,
+});
+
 const handleCleanup = (steamClient) => {
   if (!steamClient) {
-    tanjun.crash("steamClient API has not been initialized properly.", "yasi-bot", "error", "!!");
+    tanjun.crash("steamClient API has not been initialized properly", "yasi-bot", "error", "!!");
     return;
   }
 
   const cleanup = () => {
-    tanjun.print("shutting down...", "yasi-bot", "warning", "!");
-    
-    // stop idling games and logoff 
+    tanjun.print("shutting down", "yasi-bot", "warning", "!");
+
+    // stop idling games and logoff
     steamClient.gamesPlayed([]);
     steamClient.logOff();
 
@@ -40,11 +70,11 @@ const handleCleanup = (steamClient) => {
 
 const logIn = (steamClient, loginPayload, idleCallback) => {
   if (loginPayload.length === 0 || (!loginPayload[USERNAME_IDX] || !loginPayload[PASSWORD_IDX])) {
-    tanjun.crash("empty login payload.", "yasi-bot", "fatal", false, "!!!");
+    tanjun.crash("empty login payload", "yasi-bot", "fatal", false, "!!!");
     process.exit(1);
   }
 
-  // handle rate-limit
+  // handle steam api rate-limit
   steamClient.on("error", (e) => {
     tanjun.print(`steam client error: ${e.message || e}`, "yasi-bot", "error", "!!");
 
@@ -58,7 +88,7 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
           });
         },
         RATELIMIT_TIMER,
-      ); 
+      );
     }
   });
 
@@ -72,9 +102,10 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
 
     let steamGuardCode = null;
 
-    // initialize web server
+    // initialize web server and web ui 
     const app = express();
     app.use(express.urlencoded({ extended: true }));
+    app.use(express.static(VIEWS_DIR));
 
     let server = app.listen(WEBSERVER_PORT, () => {
       tanjun.print(
@@ -85,37 +116,31 @@ const logIn = (steamClient, loginPayload, idleCallback) => {
       );
     });
 
-    // create steam guard code prompt
-    // TODO: stylize it at some point
+    // render steam guard prompt panel
     app.get("/", (_req, res) => {
-      res.send(`
-        <form method="POST">
-          <label>Steam Guard Code:</label>
-          <input name="code" required />
-          <button type="submit">Submit</button>
-        </form>
-      `);
+      res.send(renderGuardForm());
     });
 
-    // after the user types the steam-guard
-    // code in the prompt send it back to yasi bot
+    // send code back to the server
     app.post("/", (req, res) => {
-      // get typed-in code from request
+      // get code from request
       steamGuardCode = req.body.code;
 
       if (!steamGuardCode) {
-        res.send("[yasi-bot] - invalid code, please type it again. (RELOAD THE PAGE)");
+        res.send(renderGuardForm("invalid code, try again"));
         tanjun.print("invalid code, please type it again (RELOAD THE PAGE)", "yasi-bot", "warning", "!");
         return;
       }
 
-      res.send("[yasi-bot] - code received. you can close this page now.");
-      tanjun.print("code received, you can close this page now", "yasi-bot", "success", "->");
+      res.send(renderGuardSuccess());
+      tanjun.print("code received, you can close the page now", "yasi-bot", "success", "->");
 
-      // send code back to yasibot
+      // send code back to yasi-bot
       callback(steamGuardCode);
 
       // close web server after 10 seconds
+      // NOTE: temporary, this will be turned into a standalone 
+      // function once all the web ui views are finished 
       setTimeout(
         () =>
           server.close((_err) => {
@@ -139,7 +164,7 @@ const idleGames = (steamClient, gamesArr, loginPayload) => {
   }
 
   steamClient.on("loggedOn", () => {
-    tanjun.print("user logged in!", "yasi-bot", "success", "->");
+    tanjun.print("user logged in", "yasi-bot", "success", "->");
 
     const gamesBeingIdle = [];
     gamesArr.forEach((game) => {
@@ -157,11 +182,11 @@ const idleGames = (steamClient, gamesArr, loginPayload) => {
 
   steamClient.on("disconnected", (_eresult, msg) => {
     tanjun.print(`disconnected: ${msg || 'unknown reason'}`, "yasi-bot", "error", "!!");
-    
+
     if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       reconnectAttempts++;
-      tanjun.print(`attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`, "yasi-bot", "info", "->");
-      
+      tanjun.print(`attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, "yasi-bot", "info", "->");
+
       setTimeout(() => {
         steamClient.logOn({
           accountName: loginPayload[USERNAME_IDX],
@@ -169,24 +194,24 @@ const idleGames = (steamClient, gamesArr, loginPayload) => {
         });
       }, EXPONENTIAL_BCKOFF_TIMER * 2 ** reconnectAttempts);
     } else {
-      tanjun.print("max reconnection attempts reached. shutting down.", "yasi-bot", "error", "!!");
+      tanjun.print("max reconnection attempts reached. shutting down", "yasi-bot", "error", "!!");
       process.exit(1);
     }
   });
 };
 
-(() =>  {
-  try { 
+(() => {
+  try {
     // init steam client wrapper api
     const steamClient = new SteamUser();
-    
+
     handleCleanup(steamClient);
 
     // parse login info
     const loginPayload = [process.argv[2], process.argv[3]];
-    
+
     logIn(steamClient, loginPayload);
-    
+
     // start idling games
     idleGames(steamClient, gamesToIdle, loginPayload);
   } catch (e) {

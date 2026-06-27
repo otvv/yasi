@@ -1,8 +1,16 @@
 {
   "idle": [
     {
-      "id": 1643320,
-      "name": "S.T.A.L.K.E.R. 2: Heart of Chornobyl"
+      "id": 730,
+      "name": "Counter-Strike 2"
+    },
+    {
+      "id": 282800,
+      "name": "100% Orange Juice"
+    },
+    {
+      "id": 4465480,
+      "name": "Counter-Strike: Global Offensive"
     }
   ],
   "ignore": [
