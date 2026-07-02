@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>yasi — steam guard</title>
+  <title>yasi-bot - steam guard</title>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="css/style.css">
@@ -12,9 +12,9 @@
       <div class="dots">
         <div class="dot"></div>
         <div class="dot"></div>
-        <div class="dot live"></div>
+        <div class="dot {{SESSION_DOT_CLASS}}"></div>
       </div>
-      <div class="chrome-title">yasi — auth</div>
+      <div class="chrome-title">yasi-bot - steam guard</div>
     </div>
     <div class="body">
       <div class="status-line">
@@ -23,9 +23,13 @@
         <span class="cursor"></span>
       </div>
       <h1>you're all set</h1>
-      <p class="sub">you can close this page now.</p>
-      <div class="footer-note">running locally - localhost:{{PORT}}</div>
+      <p class="sub">logging in... you'll be redirected to the main screen in a few seconds</p>
+      <div class="footer-note">running locally · localhost:{{PORT}}</div>
     </div>
   </div>
+  <script>
+    // redirect user to the idle session view
+    setTimeout(() => window.location.replace('/'), 3000);
+  </script>
 </body>
 </html>

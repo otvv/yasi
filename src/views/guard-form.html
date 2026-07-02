@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>yasi — steam guard</title>
+  <title>yasi - steam guard</title>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="css/style.css">
@@ -23,7 +23,7 @@
         <span class="cursor"></span>
       </div>
       <h1>verification required</h1>
-      <p class="sub">steam guard code needed, please use your steam mobile app to retrieve your steam guard code.</p>
+      <p class="sub">steam guard code needed, please use your steam mobile app to retrieve your steam guard code</p>
       <form method="POST" id="guardForm">
         <div class="code-row" id="codeRow">
           <input class="code-box" maxlength="1" inputmode="text" autocomplete="off" data-idx="0" />
@@ -33,7 +33,7 @@
           <input class="code-box" maxlength="1" inputmode="text" autocomplete="off" data-idx="4" />
         </div>
         <input type="hidden" name="code" id="codeHidden" />
-        <p class="hint">5-character code - letters and numbers</p>
+        <p class="hint">5-character code, letters and numbers</p>
         <button type="submit">submit</button>
       </form>
       <div class="footer-note">running locally - localhost:{{PORT}}</div>
@@ -54,15 +54,15 @@
         hidden.value = boxes.map(b => b.value).join('');
       });
 
-      box.addEventListener('keydown', (e) => {
-        if ((e.key === 'Backspace') && !box.value && i > 0) {
+      box.addEventListener('keydown', (event) => {
+        if ((event.key === 'Backspace') && !box.value && i > 0) {
           boxes[i - 1].focus();
         }
       });
 
-      box.addEventListener('paste', (e) => {
-        e.preventDefault();
-        const text = (e.clipboardData.getData('text') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      box.addEventListener('paste', (event) => {
+        event.preventDefault();
+        const text = (event.clipboardData.getData('text') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         text.split('').forEach((char, idx) => {
           if (boxes[idx]) {
             boxes[idx].value = char;

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>yasi-bot - idle session</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="card wide">
+    <div class="chrome spread">
+      <div class="chrome-left">
+        <div class="dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot {{SESSION_DOT_CLASS}}"></div>
+        </div>
+        <div class="chrome-title">yasi - idle session</div>
+      </div>
+      <button class="close-btn" id="closeBtn" title="shut down bot and web server">
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="body">
+      <h1>idle session</h1>
+      <p class="sub">choose which games to idle, then start the idle session</p>
+
+      <div class="game-list" id="gameList">
+        {{GAME_ROWS}}
+      </div>
+
+      <div class="hint">click on the "START IDLING" button to start/stop the idle session</div>
+    
+      <button class="toggle-btn" id="toggleBtn">start idling</button>
+
+      <div class="footer-note">running locally - localhost:{{PORT}}</div>
+    </div>
+  </div>
+
+  <script>
+    const closeBtn = document.getElementById('closeBtn');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const gameList = document.getElementById('gameList');
+
+    let sessionActive = false;
+
+    const getRows = () => [...gameList.querySelectorAll('.game-row')];
+
+    const refreshGameRowStatus = () => {
+      getRows().forEach((row) => {
+        const checkbox = row.querySelector('.game-checkbox');
+        const isChecked = checkbox.classList.contains('checked');
+        const isIdling = isChecked && sessionActive;
+
+        const label = row.querySelector('.game-status-label');
+        const dot = row.querySelector('.status-dot');
+
+        label.textContent = isIdling ? 'idling' : 'not idling';
+        label.classList.toggle('idling', isIdling);
+        label.classList.toggle('stopped', !isIdling);
+        dot.classList.toggle('idling', isIdling);
+        dot.classList.toggle('stopped', !isIdling);
+
+        checkbox.classList.toggle('disabled', sessionActive);
+        row.classList.toggle('disabled', sessionActive);
+      });
+
+      toggleBtn.classList.toggle('active', sessionActive);
+      toggleBtn.textContent = sessionActive ? 'stop idling' : 'start idling';
+    };
+
+    // handle session state between page load/refresh
+    const syncState = async () => {
+      try {
+        const res = await fetch('/api/state');
+        const { sessionActive: active } = await res.json();
+        sessionActive = active;
+        refreshGameRowStatus();
+      } catch (e) {
+        console.error('failed to fetch session state:', e);
+      }
+    };
+
+    // handle checkbox toggling
+    gameList.addEventListener('click', async (event) => {
+      if (sessionActive) {
+        return;
+      } 
+
+      const row = event.target.closest('.game-row');
+     
+      if (!row) {
+        return;
+      } 
+
+      const checkbox = row.querySelector('.game-checkbox');
+      const appId = row.querySelector('.game-appid').textContent.trim();
+      const willBeIdle = !checkbox.classList.contains('checked');
+
+      try {
+        const res = await fetch(`/api/games/${appId}/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idle: willBeIdle }),
+        });
+        const { ok } = await res.json();
+
+        if (ok) {
+          checkbox.classList.toggle('checked', willBeIdle);
+          row.classList.toggle('checked', willBeIdle);
+          refreshGameRowStatus();
+        }
+      } catch (err) {
+        console.error('failed to toggle game:', err);
+      }
+    });
+
+    // handle start/stop idle session button
+    toggleBtn.addEventListener('click', async () => {
+      const endpoint = sessionActive ? '/api/session/stop' : '/api/session/start';
+
+      try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        const { ok, reason } = await res.json();
+
+        if (ok) {
+          sessionActive = !sessionActive;
+          refreshGameRowStatus();
+        } else {
+          console.warn('session toggle failed:', reason);
+        }
+      } catch (e) {
+        console.error('failed to toggle session:', e);
+      }
+    });
+
+    // handle close button
+    closeBtn.addEventListener('click', async () => {
+      if (!confirm('shutdown the bot and the web server?')) {
+        return;
+      }
+
+      try {
+        await fetch('/api/shutdown', { method: 'POST' });
+      } catch(_err) {}
+    });
+
+    // sync state on load
+    syncState();
+  </script>
+</body>
+</html>

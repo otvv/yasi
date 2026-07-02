@@ -1,12 +1,12 @@
 {
   "idle": [
     {
-      "id": 730,
-      "name": "Counter-Strike 2"
-    },
-    {
       "id": 282800,
       "name": "100% Orange Juice"
+    },
+    {
+      "id": 730,
+      "name": "Counter-Strike 2"
     },
     {
       "id": 4465480,
@@ -20,4 +20,3 @@
     }
   ]
 }
-
