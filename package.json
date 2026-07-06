@@ -1,12 +1,12 @@
 {
   "name": "yasi-bot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "yet another steam idler bot",
   "main": "src/index.mjs",
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
-    "test": "node --trace-deprecation src/index.mjs"
+    "test": "node src/index.mjs"
   },
   "keywords": [
     "steam",
@@ -14,7 +14,9 @@
     "booster",
     "cards",
     "hours",
-    "bot"
+    "bot",
+    "docker",
+    "service"
   ],
   "author": "otvv",
   "license": "MIT",

@@ -1,6 +1,8 @@
 <div class="game-row {{ROW_CHECKED_CLASS}}">
   <div class="game-checkbox {{CHECKBOX_CHECKED_CLASS}}">
-    <svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg>
+    <svg viewBox="0 0 24 24">
+      <path d="M4 12l5 5L20 6" />
+    </svg>
   </div>
   <div class="game-info">
     <p class="game-title">{{GAME_TITLE}}</p>
@@ -10,4 +12,11 @@
     <span class="game-status-label {{STATUS_LABEL_CLASS}}">{{STATUS_LABEL}}</span>
     <span class="status-dot {{STATUS_DOT_CLASS}}"></span>
   </div>
+  <button class="row-delete-btn" title="remove game">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"
+      stroke-linejoin="miter">
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
+    </svg>
+  </button>
 </div>

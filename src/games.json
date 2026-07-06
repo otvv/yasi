@@ -7,16 +7,16 @@
     {
       "id": 730,
       "name": "Counter-Strike 2"
-    },
-    {
-      "id": 4465480,
-      "name": "Counter-Strike: Global Offensive"
     }
   ],
   "ignore": [
     {
-      "id": 306130,
-      "name": "The Elder Scrolls Online"
+      "id": 440,
+      "name": "Team Fortress 2"
+    },
+    {
+      "id": 753,
+      "name": "Steam"
     }
   ]
 }

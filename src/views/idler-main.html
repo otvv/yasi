@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <title>yasi-bot - idle session</title>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
   <div class="card wide">
     <div class="chrome spread">
@@ -13,12 +15,14 @@
         <div class="dots">
           <div class="dot"></div>
           <div class="dot"></div>
-          <div class="dot {{SESSION_DOT_CLASS}}"></div>
+          <div class="dot" id="sessionDot"></div>
         </div>
         <div class="chrome-title">yasi - idle session</div>
       </div>
       <button class="close-btn" id="closeBtn" title="shut down bot and web server">
-        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 24 24">
+          <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+        </svg>
       </button>
     </div>
 
@@ -30,22 +34,72 @@
         {{GAME_ROWS}}
       </div>
 
-      <div class="hint">click on the "START IDLING" button to start/stop the idle session</div>
-    
-      <button class="toggle-btn" id="toggleBtn">start idling</button>
+      <div>
+        <div class="hint">click on the "START IDLING" button to start/stop the idle session</div>
+        <div class="hint">you can also click on the "<strong>+</strong>" button to add a new game into the session</div>
+      </div>
 
+      <div class="action-row">
+        <button class="toggle-btn" id="toggleBtn">start idling</button>
+        <button class="add-btn" id="addBtn" title="add a game">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+        <button class="clear-btn" id="clearBtn" title="clear all games">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+          </svg>
+        </button>
+      </div>
       <div class="footer-note">running locally - localhost:{{PORT}}</div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h1>add game</h1>
+        <button class="close-btn" id="modalClose" title="cancel">
+          <svg viewBox="0 0 24 24">
+            <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+      <p class="sub">the game will be added to the ignored list.
+        check its row to move it to the idle session queue</p>
+      <div class="modal-fields">
+        <div class="field">
+          <label class="field-label" for="inputAppId">app id</label>
+          <input class="field-input" id="inputAppId" type="number" min="1" placeholder="730" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="inputName">name</label>
+          <input class="field-input" id="inputName" type="text" placeholder="Counter-Strike 2" autocomplete="off" />
+        </div>
+      </div>
+      <p class="modal-error" id="modalError"></p>
+      <button id="modalSubmit">insert game</button>
     </div>
   </div>
 
   <script>
     const closeBtn = document.getElementById('closeBtn');
     const toggleBtn = document.getElementById('toggleBtn');
+    const sessionDot = document.getElementById('sessionDot');
+    const clearBtn = document.getElementById('clearBtn');
+    const addBtn = document.getElementById('addBtn');
     const gameList = document.getElementById('gameList');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalClose = document.getElementById('modalClose');
+    const modalSubmit = document.getElementById('modalSubmit');
+    const inputAppId = document.getElementById('inputAppId');
+    const inputName = document.getElementById('inputName');
+    const modalError = document.getElementById('modalError');
 
     let sessionActive = false;
 
-    const getRows = () => [...gameList.querySelectorAll('.game-row')];
+    const getRows = () => [ ...gameList.querySelectorAll('.game-row') ];
 
     const refreshGameRowStatus = () => {
       getRows().forEach((row) => {
@@ -55,6 +109,7 @@
 
         const label = row.querySelector('.game-status-label');
         const dot = row.querySelector('.status-dot');
+        const deleteBtn = row.querySelector('.row-delete-btn');
 
         label.textContent = isIdling ? 'idling' : 'not idling';
         label.classList.toggle('idling', isIdling);
@@ -64,10 +119,23 @@
 
         checkbox.classList.toggle('disabled', sessionActive);
         row.classList.toggle('disabled', sessionActive);
+
+        if (deleteBtn) {
+          deleteBtn.disabled = sessionActive;
+          deleteBtn.classList.toggle('disabled', sessionActive);
+        }
       });
+      sessionDot.classList.toggle('live', sessionActive);
+      sessionDot.classList.toggle('error', !sessionActive);
 
       toggleBtn.classList.toggle('active', sessionActive);
       toggleBtn.textContent = sessionActive ? 'stop idling' : 'start idling';
+
+      addBtn.disabled = sessionActive;
+      addBtn.classList.toggle('disabled', sessionActive);
+
+      clearBtn.disabled = sessionActive;
+      clearBtn.classList.toggle('disabled', sessionActive);
     };
 
     // handle session state between page load/refresh
@@ -77,22 +145,46 @@
         const { sessionActive: active } = await res.json();
         sessionActive = active;
         refreshGameRowStatus();
-      } catch (e) {
-        console.error('failed to fetch session state:', e);
+      } catch (err) {
+        console.error('failed to fetch session state:', err);
       }
     };
 
     // handle checkbox toggling
     gameList.addEventListener('click', async (event) => {
+      const deleteBtn = event.target.closest('.row-delete-btn');
+
+      if (deleteBtn) {
+        if (sessionActive) {
+          return;
+        }
+
+        const row = deleteBtn.closest('.game-row');
+        const appId = row.querySelector('.game-appid').textContent.trim();
+
+        try {
+          const res = await fetch(`/api/games/${appId}`, { method: 'DELETE' });
+          const { ok } = await res.json();
+
+          if (ok) {
+            row.remove();
+          }
+        } catch (err) {
+          console.error('failed to delete game:', err);
+        }
+
+        return;
+      }
+
       if (sessionActive) {
         return;
-      } 
+      }
 
       const row = event.target.closest('.game-row');
-     
+
       if (!row) {
         return;
-      } 
+      }
 
       const checkbox = row.querySelector('.game-checkbox');
       const appId = row.querySelector('.game-appid').textContent.trim();
@@ -104,8 +196,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idle: willBeIdle }),
         });
-        const { ok } = await res.json();
 
+        const { ok } = await res.json();
         if (ok) {
           checkbox.classList.toggle('checked', willBeIdle);
           row.classList.toggle('checked', willBeIdle);
@@ -130,8 +222,30 @@
         } else {
           console.warn('session toggle failed:', reason);
         }
-      } catch (e) {
-        console.error('failed to toggle session:', e);
+      } catch (err) {
+        console.error('failed to toggle session:', err);
+      }
+    });
+
+    // handle clear list button
+    clearBtn.addEventListener('click', async () => {
+      if (sessionActive) {
+        return;
+      }
+
+      if (!confirm('remove all games from the list? this cannot be undone.')) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/games', { method: 'DELETE' });
+
+        const { ok } = await res.json();
+        if (ok) {
+          gameList.innerHTML = '';
+        }
+      } catch (err) {
+        console.error('failed to clear games.json file:', err);
       }
     });
 
@@ -143,11 +257,107 @@
 
       try {
         await fetch('/api/shutdown', { method: 'POST' });
-      } catch(_err) {}
+      } catch (_err) { }
+    });
+
+
+    // handle modal
+    const openModal = () => {
+      modalOverlay.classList.add('open');
+      modalOverlay.setAttribute('aria-hidden', 'false');
+      modalError.textContent = '';
+      inputAppId.value = '';
+      inputName.value = '';
+      inputAppId.focus();
+    };
+
+    const closeModal = () => {
+      modalOverlay.classList.remove('open');
+      modalOverlay.setAttribute('aria-hidden', 'true');
+    };
+
+    addBtn.addEventListener('click', openModal);
+    modalClose.addEventListener('click', closeModal);
+
+    // close on overlay backdrop click
+    modalOverlay.addEventListener('click', (event) => {
+      if (event.target === modalOverlay) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && modalOverlay.classList.contains('open')) {
+        closeModal();
+      }
+    });
+
+    // inject a newly added game row into the list without a full page reload
+    const appendGameRow = (game) => {
+      const row = document.createElement('div');
+      row.className = 'game-row';
+      row.innerHTML = `
+        <div class="game-checkbox">
+          <svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+        <div class="game-info">
+          <p class="game-title">${game.name}</p>
+          <p class="game-appid">${game.id}</p>
+        </div>
+        <div class="game-status">
+          <span class="game-status-label stopped">not idling</span>
+          <span class="status-dot stopped"></span>
+        </div>
+        <button class="row-delete-btn" title="remove game">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+            <line x1="6" y1="6" x2="18" y2="18"/>
+            <line x1="18" y1="6" x2="6" y2="18"/>
+          </svg>
+        </button>
+      `;
+      gameList.appendChild(row);
+      refreshGameRowStatus();
+    };
+
+    modalSubmit.addEventListener('click', async () => {
+      const appId = parseInt(inputAppId.value.trim(), 10);
+      const name = inputName.value.trim();
+
+      if (!appId || appId <= 0) {
+        modalError.textContent = 'enter a valid app id';
+        return;
+      }
+      if (!name) {
+        modalError.textContent = 'enter a name for the game (can be anything)';
+        return;
+      }
+
+      modalError.textContent = '';
+
+      try {
+        const res = await fetch('/api/games/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: appId, name }),
+        });
+        const { ok, reason } = await res.json();
+
+        if (!ok) {
+          modalError.textContent = reason;
+          return;
+        }
+
+        appendGameRow({ id: appId, name });
+        closeModal();
+      } catch (err) {
+        modalError.textContent = 'failed to add game.';
+        console.error('failed to add game:', err);
+      }
     });
 
     // sync state on load
     syncState();
   </script>
 </body>
+
 </html>

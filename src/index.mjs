@@ -1,7 +1,7 @@
 /*
  */
 
-import express from 'express';
+import express from "express";
 import SteamUser from "steam-user";
 import tanjun from "tanjun-log";
 import fs from "fs";
@@ -10,24 +10,27 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// TODO: move some of these globals to a .env file
+
 const HTML_VIEWS_DIR = path.join(__dirname, "views");
 const GAMES_JSON_DIR = path.join(__dirname, "games.json");
 const USERNAME_IDX = 0;
 const PASSWORD_IDX = 1;
 const EXPONENTIAL_BCKOFF_TIMER = 5000; // 5 seconds
-const RATELIMIT_TIMER = (10 * 60 * 1000); // 10 minutes
+const RATELIMIT_TIMER = 10 * 60 * 1000; // 10 minutes
 const WEBSERVER_PORT = 1337;
 
 // shared bot mutable state
 const state = {
   sessionActive: false,
+  isShuttingDown: false,
   server: null,
 };
 
 // json helpers
-const readJsonFile = () =>  {
+const readJsonFile = () => {
   return JSON.parse(fs.readFileSync(GAMES_JSON_DIR, "utf-8"));
-}
+};
 const writeJsonFile = (payload) => {
   fs.writeFileSync(GAMES_JSON_DIR, JSON.stringify(payload, null, 2), "utf-8");
 };
@@ -42,26 +45,29 @@ const renderView = (viewName, replacements = {}) => {
 };
 
 // web ui views wrappers
-const renderGuardForm = (errorMsg) => renderView("guard-form.html", {
-  PORT: WEBSERVER_PORT,
-  STATUS_DOT_CLASS: errorMsg ? "error" : "live",
-  STATUS_LINE_CLASS: errorMsg ? "error" : "",
-  STATUS_MESSAGE: errorMsg ? errorMsg : "waiting for steam guard code",
-});
-const renderGuardSuccess = () => renderView("guard-success.html", {
-  PORT: WEBSERVER_PORT,
-  SESSION_DOT_CLASS: "live",
-});
-const renderGamesList = (game, isIdle) => renderView("idler-list.html", {
-  ROW_CHECKED_CLASS: isIdle ? "checked" : "",
-  CHECKBOX_CHECKED_CLASS: isIdle ? "checked" : "",
-  GAME_TITLE: game.name,
-  APP_ID: game.id,
-  
-  STATUS_DOT_CLASS: "stopped",
-  STATUS_LABEL_CLASS: "stopped",
-  STATUS_LABEL: "not idling",
-});
+const renderGuardForm = (errorMsg) =>
+  renderView("guard-form.html", {
+    PORT: WEBSERVER_PORT,
+    STATUS_DOT_CLASS: errorMsg ? "error" : "live",
+    STATUS_LINE_CLASS: errorMsg ? "error" : "",
+    STATUS_MESSAGE: errorMsg ? errorMsg : "waiting for steam guard code",
+  });
+const renderGuardSuccess = () =>
+  renderView("guard-success.html", {
+    PORT: WEBSERVER_PORT,
+    SESSION_DOT_CLASS: "live",
+  });
+const renderGamesList = (game, isIdle) =>
+  renderView("idler-list.html", {
+    ROW_CHECKED_CLASS: isIdle ? "checked" : "",
+    CHECKBOX_CHECKED_CLASS: isIdle ? "checked" : "",
+    GAME_TITLE: game.name,
+    APP_ID: game.id,
+
+    STATUS_DOT_CLASS: "stopped",
+    STATUS_LABEL_CLASS: "stopped",
+    STATUS_LABEL: "not idling",
+  });
 const renderIdlerView = () => {
   const dataPayload = readJsonFile();
   const rows = [
@@ -71,6 +77,7 @@ const renderIdlerView = () => {
 
   return renderView("idler-main.html", {
     SESSION_DOT_CLASS: "live",
+    PORT: WEBSERVER_PORT,
     GAME_ROWS: rows,
   });
 };
@@ -84,6 +91,9 @@ const handleCleanup = (steamClient) => {
   const cleanup = () => {
     tanjun.print("shutting down", "yasi-bot", "warning", "!");
 
+    // tell the server its time to shutdown
+    state.isShuttingDown = true;
+
     steamClient.gamesPlayed([]);
     steamClient.logOff();
 
@@ -94,20 +104,19 @@ const handleCleanup = (steamClient) => {
     }
   };
 
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
 
   return cleanup;
 };
-
 
 const startIdlerServer = (steamClient, cleanupCallback) => {
   const app = express();
   app.use(express.json());
   app.use(express.static(HTML_VIEWS_DIR));
 
-  // reads games.json on every request so 
-  // the list can read the latest checkbox 
+  // reads games.json on every request so
+  // the list can read the latest checkbox
   // state even after a page refresh
   app.get("/", (_req, res) => {
     res.send(renderIdlerView());
@@ -134,8 +143,35 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
 
     tanjun.print(
       `idling: ${dataPayload.idle.map((game) => game.name).join(", ")}`,
-      "yasi-bot", "info", "->",
+      "yasi-bot",
+      "success",
+      "->",
     );
+
+    res.json({ ok: true });
+  });
+
+  app.post("/api/games/add", (req, res) => {
+    const { id, name } = req.body;
+    const appId = parseInt(id, 10);
+
+    if (!appId || appId <= 0 || !name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ ok: false, reason: "invalid app id or name" });
+    }
+
+    const dataPayload = readJsonFile();
+    const alreadyExists =
+      dataPayload.idle.some((game) => game.id === appId) ||
+      dataPayload.ignore.some((game) => game.id === appId);
+
+    if (alreadyExists) {
+      return res.json({ ok: false, reason: "game already exists in your list" });
+    }
+
+    dataPayload.ignore.push({ id: appId, name: name.trim() });
+    writeJsonFile(dataPayload);
+
+    tanjun.print(`game added: ${name.trim()} (${appId})`, "yasi-bot", "success", "->");
 
     res.json({ ok: true });
   });
@@ -145,7 +181,7 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
       return res.json({ ok: false, reason: "no active idling session (idling stopped)" });
     }
 
-    // empty games played object and stop idling games
+    // empty games idle object and stop idle session
     steamClient.gamesPlayed([]);
     state.sessionActive = false;
 
@@ -186,11 +222,45 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
     res.json({ ok: true, changed: true });
   });
 
+  // delete a single game row by appId
+  app.delete("/api/games/:appId", (req, res) => {
+    const appId = parseInt(req.params.appId, 10);
+
+    if (isNaN(appId)) {
+      return res.status(400).json({ ok: false, reason: "invalid app id" });
+    }
+
+    const dataPayload = readJsonFile();
+
+    const inIdle = dataPayload.idle.findIndex((game) => game.id === appId);
+    const inIgnore = dataPayload.ignore.findIndex((game) => game.id === appId);
+
+    if (inIdle !== -1) {
+      dataPayload.idle.splice(inIdle, 1);
+    } else if (inIgnore !== -1) {
+      dataPayload.ignore.splice(inIgnore, 1);
+    } else {
+      return res.json({ ok: false, reason: "game not found" });
+    }
+
+    writeJsonFile(dataPayload);
+    tanjun.print(`game ${appId} removed`, "yasi-bot", "warning", "!");
+    res.json({ ok: true });
+  });
+
+  // clear all games from the json file
+  app.delete("/api/games", (_req, res) => {
+    writeJsonFile({ idle: [], ignore: [] });
+
+    tanjun.print("game list cleared", "yasi-bot", "warning", "!");
+    res.json({ ok: true });
+  });
+
   // shutdown bot in case the user clicks
-  // in the close button 
+  // in the close button
   app.post("/api/shutdown", (_req, res) => {
     res.json({ ok: true }); // respond before killing the process
-    
+
     cleanupCallback();
   });
 
@@ -202,7 +272,7 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
 };
 
 const logIn = (steamClient, loginPayload) => {
-  if (loginPayload.length === 0 || (!loginPayload[USERNAME_IDX] || !loginPayload[PASSWORD_IDX])) {
+  if (loginPayload.length === 0 || !loginPayload[USERNAME_IDX] || !loginPayload[PASSWORD_IDX]) {
     tanjun.crash("empty login payload", "yasi-bot", "fatal", false, "!!!");
     process.exit(1);
   }
@@ -212,9 +282,6 @@ const logIn = (steamClient, loginPayload) => {
 
     tanjun.error(`steamClient API error: ${lowerCaseErrorMsg}`, "yasi-bot", "error", "!!");
 
-    // FIXME: stops the BOT from redirecting the user
-    // if something goes wrong in the login process
-
     if (err.eresult === SteamUser.EResult.RateLimitExceeded) {
       tanjun.print("rate limited by steam, waiting before retrying", "yasi-bot", "error", "!!");
       setTimeout(() => {
@@ -223,18 +290,26 @@ const logIn = (steamClient, loginPayload) => {
           password: loginPayload[PASSWORD_IDX],
         });
       }, RATELIMIT_TIMER);
-    } else { 
-      // this will crash the app in case the steamClient API 
-      // throws in any error other than RateLimitExceeded
+    } else {
+      // this will crash the app in case the steamClient API
+      // throws any error other than RateLimitExceeded
       tanjun.crash("unrecoverable error, closing app", "yasi-bot", "fatal", "!!!");
-      process.exit(1);
+
+      // close server too if it happens to be running already
+      if (state.server) {
+        state.server.close(() => process.exit(1));
+      } else {
+        process.exit(1);
+      }
     }
   });
 
   steamClient.on("steamGuard", (_domain, callback) => {
     tanjun.print(
       `steam guard code needed, please visit the web interface in order to enter it`,
-      "yasi-bot", "warning", "!",
+      "yasi-bot",
+      "warning",
+      "!",
     );
 
     const app = express();
@@ -242,11 +317,13 @@ const logIn = (steamClient, loginPayload) => {
     app.use(express.static(HTML_VIEWS_DIR));
 
     // guard server goes into state.server so cleanup can close it
-    // even if loggedOn never fires (e.g. wrong credentials after guard)
+    // even if loggedOn never fires
     state.server = app.listen(WEBSERVER_PORT, () => {
       tanjun.print(
         `web interface ready @ http://localhost:${WEBSERVER_PORT}`,
-        "yasi-bot", "success", "->",
+        "yasi-bot",
+        "success",
+        "->",
       );
     });
 
@@ -292,16 +369,14 @@ const idleGames = (steamClient, loginPayload, cleanupCallback) => {
   });
 
   steamClient.on("disconnected", (_eresult, err) => {
+    if (state.isShuttingDown) {
+      return;
+    }
+
     const lowerCaseErrorMsg = (err || "unknown error").toLowerCase();
-
-    // FIXME: make the BOT stop attempting to reconnect 
-    // if the user tries to shutdown the bot using 
-    // the close button or the handleCleanup method
-    // gets triggered without forcing the bot to shutdown (CTRL+C)
-
     tanjun.print(`disconnected: ${lowerCaseErrorMsg}`, "yasi-bot", "error", "!!");
 
-    // clear session state so the UI refreshes the 
+    // clear session state so the UI refreshes the
     // current idle session status on next page load
     state.sessionActive = false;
 
@@ -309,15 +384,20 @@ const idleGames = (steamClient, loginPayload, cleanupCallback) => {
       reconnectAttempts++;
       tanjun.print(
         `attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
-        "yasi-bot", "info", "->",
+        "yasi-bot",
+        "info",
+        "->",
       );
 
-      setTimeout(() => {
-        steamClient.logOn({
-          accountName: loginPayload[USERNAME_IDX],
-          password: loginPayload[PASSWORD_IDX],
-        });
-      }, EXPONENTIAL_BCKOFF_TIMER * 2 ** reconnectAttempts);
+      setTimeout(
+        () => {
+          steamClient.logOn({
+            accountName: loginPayload[USERNAME_IDX],
+            password: loginPayload[PASSWORD_IDX],
+          });
+        },
+        EXPONENTIAL_BCKOFF_TIMER * 2 ** reconnectAttempts,
+      );
     } else {
       tanjun.print("max reconnection attempts reached. shutting down", "yasi-bot", "error", "!!");
       process.exit(1);
@@ -335,7 +415,7 @@ const idleGames = (steamClient, loginPayload, cleanupCallback) => {
     logIn(steamClient, loginPayload);
     idleGames(steamClient, loginPayload, cleanup);
   } catch (err) {
-    tanjun.crash(`unexpected error: ${err?.toLowerCase()}`, "yasi-bot", "fatal", false, "!!!");
+    tanjun.crash(`unexpected error: ${err?.message?.toLowerCase()}`, "yasi-bot", "fatal", false, "!!!");
     process.exit(1);
   }
 })();
