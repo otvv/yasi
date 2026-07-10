@@ -19,12 +19,13 @@ const PASSWORD_IDX = 1;
 const EXPONENTIAL_BCKOFF_TIMER = 5000; // 5 seconds
 const RATELIMIT_TIMER = 10 * 60 * 1000; // 10 minutes
 const WEBSERVER_PORT = 1337;
+const WEBSERVER_ADDRESS = "127.0.0.1" // TODO: use docker container network address or .env var as fallback.
 
 // shared bot mutable state
 const state = {
-  sessionActive: false,
+  idleSessionActive: false,
   isShuttingDown: false,
-  server: null,
+  serverInstance: null,
 };
 
 // json helpers
@@ -47,6 +48,7 @@ const renderView = (viewName, replacements = {}) => {
 // web ui views wrappers
 const renderGuardForm = (errorMsg) =>
   renderView("guard-form.html", {
+    LOCAL_ADDRESS: WEBSERVER_ADDRESS,
     PORT: WEBSERVER_PORT,
     STATUS_DOT_CLASS: errorMsg ? "error" : "live",
     STATUS_LINE_CLASS: errorMsg ? "error" : "",
@@ -54,6 +56,7 @@ const renderGuardForm = (errorMsg) =>
   });
 const renderGuardSuccess = () =>
   renderView("guard-success.html", {
+    LOCAL_ADDRESS: WEBSERVER_ADDRESS,
     PORT: WEBSERVER_PORT,
     SESSION_DOT_CLASS: "live",
   });
@@ -76,8 +79,9 @@ const renderIdlerView = () => {
   ].join("\n");
 
   return renderView("idler-main.html", {
-    SESSION_DOT_CLASS: "live",
     PORT: WEBSERVER_PORT,
+    LOCAL_ADDRESS: WEBSERVER_ADDRESS,
+    SESSION_DOT_CLASS: "live",
     GAME_ROWS: rows,
   });
 };
@@ -97,8 +101,8 @@ const handleCleanup = (steamClient) => {
     steamClient.gamesPlayed([]);
     steamClient.logOff();
 
-    if (state.server) {
-      state.server.close(() => process.exit(0));
+    if (state.serverInstance) {
+      state.serverInstance.close(() => process.exit(0));
     } else {
       process.exit(0);
     }
@@ -122,13 +126,13 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
     res.send(renderIdlerView());
   });
 
-  // sync sessionActive after a page refresh
+  // sync idleSessionActive after a page refresh
   app.get("/api/state", (_req, res) => {
-    res.json({ sessionActive: state.sessionActive });
+    res.json({ idleSessionActive: state.idleSessionActive });
   });
 
   app.post("/api/session/start", (_req, res) => {
-    if (state.sessionActive) {
+    if (state.idleSessionActive) {
       return res.json({ ok: false, reason: "idling session is already active" });
     }
 
@@ -139,7 +143,7 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
 
     // start idling games
     steamClient.gamesPlayed(dataPayload.idle.map((game) => game.id));
-    state.sessionActive = true;
+    state.idleSessionActive = true;
 
     tanjun.print(
       `idling: ${dataPayload.idle.map((game) => game.name).join(", ")}`,
@@ -177,13 +181,13 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
   });
 
   app.post("/api/session/stop", (_req, res) => {
-    if (!state.sessionActive) {
+    if (!state.idleSessionActive) {
       return res.json({ ok: false, reason: "no active idling session (idling stopped)" });
     }
 
     // empty games idle object and stop idle session
     steamClient.gamesPlayed([]);
-    state.sessionActive = false;
+    state.idleSessionActive = false;
 
     tanjun.print("idling stopped", "yasi-bot", "info", "->");
 
@@ -266,7 +270,7 @@ const startIdlerServer = (steamClient, cleanupCallback) => {
 
   // create the persistent web server
   // to host the idler web ui
-  state.server = app.listen(WEBSERVER_PORT, () => {
+  state.serverInstance = app.listen(WEBSERVER_PORT, () => {
     tanjun.print("idler main view ready, redirecting user", "yasi-bot", "success", "->");
   });
 };
@@ -296,8 +300,8 @@ const logIn = (steamClient, loginPayload) => {
       tanjun.crash("unrecoverable error, closing app", "yasi-bot", "fatal", "!!!");
 
       // close server too if it happens to be running already
-      if (state.server) {
-        state.server.close(() => process.exit(1));
+      if (state.serverInstance) {
+        state.serverInstance.close(() => process.exit(1));
       } else {
         process.exit(1);
       }
@@ -316,9 +320,9 @@ const logIn = (steamClient, loginPayload) => {
     app.use(express.urlencoded({ extended: true }));
     app.use(express.static(HTML_VIEWS_DIR));
 
-    // guard server goes into state.server so cleanup can close it
+    // steam-guard view server goes into state.serverInstance so cleanup can close it
     // even if loggedOn never fires
-    state.server = app.listen(WEBSERVER_PORT, () => {
+    state.serverInstance = app.listen(WEBSERVER_PORT, () => {
       tanjun.print(
         `web interface ready @ http://localhost:${WEBSERVER_PORT}`,
         "yasi-bot",
@@ -346,8 +350,8 @@ const logIn = (steamClient, loginPayload) => {
       callback(steamGuardCode);
 
       // close immediately
-      state.server.close(() => {
-        state.server = null;
+      state.serverInstance.close(() => {
+        state.serverInstance = null;
         tanjun.print("closing temporary steam guard web server", "yasi-bot", "info", "->");
       });
     });
@@ -378,7 +382,7 @@ const idleGames = (steamClient, loginPayload, cleanupCallback) => {
 
     // clear session state so the UI refreshes the
     // current idle session status on next page load
-    state.sessionActive = false;
+    state.idleSessionActive = false;
 
     if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       reconnectAttempts++;

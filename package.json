@@ -1,6 +1,6 @@
 {
   "name": "yasi-bot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "yet another steam idler bot",
   "main": "src/index.mjs",
   "type": "module",

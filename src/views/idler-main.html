@@ -52,7 +52,7 @@
           </svg>
         </button>
       </div>
-      <div class="footer-note">running locally - localhost:{{PORT}}</div>
+      <div class="footer-note">running locally - {{LOCAL_ADDRESS}}:{{PORT}}</div>
     </div>
   </div>
 
@@ -142,8 +142,8 @@
     const syncState = async () => {
       try {
         const res = await fetch('/api/state');
-        const { sessionActive: active } = await res.json();
-        sessionActive = active;
+        const { idleSessionActive: active } = await res.json();
+        idleSessionActive = active;
         refreshGameRowStatus();
       } catch (err) {
         console.error('failed to fetch session state:', err);
@@ -292,30 +292,34 @@
       }
     });
 
-    // inject a newly added game row into the list without a full page reload
-    const appendGameRow = (game) => {
+    // fetch game row template file
+    let rowTemplate = null;
+    const getRowTemplate = async () => {
+      if (rowTemplate) {
+        return rowTemplate;
+      } 
+
+      const res = await fetch('/idler-list.html');
+      rowTemplate = await res.text();
+      return rowTemplate;
+    };
+
+    // inject a newly added game row into the 
+    // list without a full page reload
+    const appendGameRow = async (game) => {
+      const template = await getRowTemplate();
+      const html = template
+        .replace('{{ROW_CHECKED_CLASS}}', '')
+        .replace('{{CHECKBOX_CHECKED_CLASS}}', '')
+        .replace('{{GAME_TITLE}}', game.name)
+        .replace('{{APP_ID}}', game.id)
+        .replace('{{STATUS_LABEL_CLASS}}', 'stopped')
+        .replace('{{STATUS_LABEL}}', 'not idling')
+        .replace('{{STATUS_DOT_CLASS}}', 'stopped');
+
       const row = document.createElement('div');
-      row.className = 'game-row';
-      row.innerHTML = `
-        <div class="game-checkbox">
-          <svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg>
-        </div>
-        <div class="game-info">
-          <p class="game-title">${game.name}</p>
-          <p class="game-appid">${game.id}</p>
-        </div>
-        <div class="game-status">
-          <span class="game-status-label stopped">not idling</span>
-          <span class="status-dot stopped"></span>
-        </div>
-        <button class="row-delete-btn" title="remove game">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
-            <line x1="6" y1="6" x2="18" y2="18"/>
-            <line x1="18" y1="6" x2="6" y2="18"/>
-          </svg>
-        </button>
-      `;
-      gameList.appendChild(row);
+      row.innerHTML = html.trim();
+      gameList.appendChild(row.firstElementChild);
       refreshGameRowStatus();
     };
 
@@ -347,7 +351,7 @@
           return;
         }
 
-        appendGameRow({ id: appId, name });
+        await appendGameRow({ id: appId, name });
         closeModal();
       } catch (err) {
         modalError.textContent = 'failed to add game.';
