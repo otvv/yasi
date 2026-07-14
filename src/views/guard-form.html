@@ -40,23 +40,23 @@
     </div>
   </div>
   <script>
-    const boxes = [...document.querySelectorAll('.code-box')];
+    const inputBoxesElement = [...document.querySelectorAll('.code-box')];
     const hidden = document.getElementById('codeHidden');
     const form = document.getElementById('guardForm');
 
-    boxes[0].focus();
+    inputBoxesElement[0].focus();
 
-    boxes.forEach((box, i) => {
+    inputBoxesElement.forEach((box, i) => {
       box.addEventListener('input', () => {
         box.value = box.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
         box.classList.toggle('filled', box.value.length > 0);
-        if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
-        hidden.value = boxes.map(b => b.value).join('');
+        if (box.value && i < inputBoxesElement.length - 1) inputBoxesElement[i + 1].focus();
+        hidden.value = inputBoxesElement.map(b => b.value).join('');
       });
 
       box.addEventListener('keydown', (event) => {
         if ((event.key === 'Backspace') && !box.value && i > 0) {
-          boxes[i - 1].focus();
+          inputBoxesElement[i - 1].focus();
         }
       });
 
@@ -64,18 +64,18 @@
         event.preventDefault();
         const text = (event.clipboardData.getData('text') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         text.split('').forEach((char, idx) => {
-          if (boxes[idx]) {
-            boxes[idx].value = char;
-            boxes[idx].classList.add('filled');
+          if (inputBoxesElement[idx]) {
+            inputBoxesElement[idx].value = char;
+            inputBoxesElement[idx].classList.add('filled');
           }
         });
-        boxes[Math.min(text.length, boxes.length - 1)].focus();
-        hidden.value = boxes.map(b => b.value).join('');
+        inputBoxesElement[Math.min(text.length, inputBoxesElement.length - 1)].focus();
+        hidden.value = inputBoxesElement.map(b => b.value).join('');
       });
     });
 
     form.addEventListener('submit', () => {
-      hidden.value = boxes.map(b => b.value).join('');
+      hidden.value = inputBoxesElement.map(b => b.value).join('');
     });
   </script>
 </body>

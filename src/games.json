@@ -7,13 +7,13 @@
     {
       "id": 730,
       "name": "Counter-Strike 2"
-    }
-  ],
-  "ignore": [
+    },
     {
       "id": 440,
       "name": "Team Fortress 2"
-    },
+    }
+  ],
+  "ignore": [
     {
       "id": 753,
       "name": "Steam"

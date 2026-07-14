@@ -15,7 +15,7 @@
         <div class="dots">
           <div class="dot"></div>
           <div class="dot"></div>
-          <div class="dot" id="sessionDot"></div>
+          <div class="dot" id="sessionStateDot"></div>
         </div>
         <div class="chrome-title">yasi - idle session</div>
       </div>
@@ -56,7 +56,7 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
+  <div class="modal-overlay" id="modal" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-header">
         <h1>add game</h1>
@@ -84,60 +84,73 @@
   </div>
 
   <script>
-    const closeBtn = document.getElementById('closeBtn');
-    const toggleBtn = document.getElementById('toggleBtn');
-    const sessionDot = document.getElementById('sessionDot');
-    const clearBtn = document.getElementById('clearBtn');
-    const addBtn = document.getElementById('addBtn');
-    const gameList = document.getElementById('gameList');
-    const modalOverlay = document.getElementById('modalOverlay');
-    const modalClose = document.getElementById('modalClose');
-    const modalSubmit = document.getElementById('modalSubmit');
-    const inputAppId = document.getElementById('inputAppId');
-    const inputName = document.getElementById('inputName');
-    const modalError = document.getElementById('modalError');
+    const shutdownBtnElement = document.getElementById('closeBtn');
+    const toggleSessionBtnElement = document.getElementById('toggleBtn');
+    const sessionStateDotElement = document.getElementById('sessionStateDot');
+    const clearBtnElement = document.getElementById('clearBtn');
+    const addBtnElement = document.getElementById('addBtn');
+    const gameListElement = document.getElementById('gameList');
+    const modalElement = document.getElementById('modal');
+    const modalCloseBtnElement = document.getElementById('modalClose');
+    const modalSubmitBtnElement = document.getElementById('modalSubmit');
+    const inputAppIdElement = document.getElementById('inputAppId');
+    const inputNameElement = document.getElementById('inputName');
+    const modalErrorElement = document.getElementById('modalError');
 
-    let sessionActive = false;
+    let idleSessionActive = false;
 
-    const getRows = () => [ ...gameList.querySelectorAll('.game-row') ];
+
+    const getGameRows = () => [ ...gameListElement.querySelectorAll('.game-row') ];
 
     const refreshGameRowStatus = () => {
-      getRows().forEach((row) => {
-        const checkbox = row.querySelector('.game-checkbox');
-        const isChecked = checkbox.classList.contains('checked');
-        const isIdling = isChecked && sessionActive;
+      getGameRows().forEach((gameRow) => {
+        const checkboxElement = gameRow.querySelector('.game-checkbox');
+        const isChecked = checkboxElement.classList.contains('checked');
+        const isIdling = isChecked && idleSessionActive;
 
-        const label = row.querySelector('.game-status-label');
-        const dot = row.querySelector('.status-dot');
-        const deleteBtn = row.querySelector('.row-delete-btn');
+        const labelElement = gameRow.querySelector('.game-status-label');
+        const dotElement = gameRow.querySelector('.status-dot');
+        const deleteBtn = gameRow.querySelector('.row-delete-btn');
 
-        label.textContent = isIdling ? 'idling' : 'not idling';
-        label.classList.toggle('idling', isIdling);
-        label.classList.toggle('stopped', !isIdling);
-        dot.classList.toggle('idling', isIdling);
-        dot.classList.toggle('stopped', !isIdling);
+        labelElement.textContent = isIdling ? 'idling' : 'not idling';
+        labelElement.classList.toggle('idling', isIdling);
+        labelElement.classList.toggle('stopped', !isIdling);
+        dotElement.classList.toggle('idling', isIdling);
+        dotElement.classList.toggle('stopped', !isIdling);
 
-        checkbox.classList.toggle('disabled', sessionActive);
-        row.classList.toggle('disabled', sessionActive);
+        checkboxElement.classList.toggle('disabled', idleSessionActive);
+        gameRow.classList.toggle('disabled', idleSessionActive);
 
         if (deleteBtn) {
-          deleteBtn.disabled = sessionActive;
-          deleteBtn.classList.toggle('disabled', sessionActive);
+          deleteBtn.disabled = idleSessionActive;
+          deleteBtn.classList.toggle('disabled', idleSessionActive);
         }
       });
-      sessionDot.classList.toggle('live', sessionActive);
-      sessionDot.classList.toggle('error', !sessionActive);
 
-      toggleBtn.classList.toggle('active', sessionActive);
-      toggleBtn.textContent = sessionActive ? 'stop idling' : 'start idling';
+      // handle session state dot
+      sessionStateDotElement.classList.toggle('live', idleSessionActive);
+      sessionStateDotElement.classList.toggle('error', !idleSessionActive);
 
-      addBtn.disabled = sessionActive;
-      addBtn.classList.toggle('disabled', sessionActive);
-
-      clearBtn.disabled = sessionActive;
-      clearBtn.classList.toggle('disabled', sessionActive);
+      // enable/disable buttons based on
+      // idle session state
+      toggleSessionBtnElement.classList.toggle('active', idleSessionActive);
+      toggleSessionBtnElement.textContent = idleSessionActive ? 'stop idling' : 'start idling';
+      //
+      addBtnElement.disabled = idleSessionActive;
+      addBtnElement.classList.toggle('disabled', idleSessionActive);
+      //
+      clearBtnElement.disabled = idleSessionActive;
+      clearBtnElement.classList.toggle('disabled', idleSessionActive);
     };
 
+    // TODO: save idle session state in case the user opens another
+    // instance of the web ui
+    // the ui should reflect the current state regardless of where
+    // it was changed. 
+    //
+    // e.g: if they change something in one web ui window, it
+    // should reflect on the other web ui window open
+    
     // handle session state between page load/refresh
     const syncState = async () => {
       try {
@@ -151,23 +164,23 @@
     };
 
     // handle checkbox toggling
-    gameList.addEventListener('click', async (event) => {
-      const deleteBtn = event.target.closest('.row-delete-btn');
+    gameListElement.addEventListener('click', async (event) => {
+      const deleteGameBtnElement = event.target.closest('.row-delete-btn');
 
-      if (deleteBtn) {
-        if (sessionActive) {
+      if (deleteGameBtnElement) {
+        if (idleSessionActive) {
           return;
         }
 
-        const row = deleteBtn.closest('.game-row');
-        const appId = row.querySelector('.game-appid').textContent.trim();
+        const gameRowElement = deleteGameBtnElement.closest('.game-row');
+        const appId = gameRowElement.querySelector('.game-appid').textContent.trim();
 
         try {
           const res = await fetch(`/api/games/${appId}`, { method: 'DELETE' });
           const { ok } = await res.json();
 
           if (ok) {
-            row.remove();
+            gameRowElement.remove();
           }
         } catch (err) {
           console.error('failed to delete game:', err);
@@ -176,22 +189,22 @@
         return;
       }
 
-      if (sessionActive) {
+      if (idleSessionActive) {
         return;
       }
 
-      const row = event.target.closest('.game-row');
+      const gameRowElement = event.target.closest('.game-row');
 
-      if (!row) {
+      if (!gameRowElement) {
         return;
       }
 
-      const checkbox = row.querySelector('.game-checkbox');
-      const appId = row.querySelector('.game-appid').textContent.trim();
-      const willBeIdle = !checkbox.classList.contains('checked');
+      const checkboxElement = gameRowElement.querySelector('.game-checkbox');
+      const appIdValue = gameRowElement.querySelector('.game-appid').textContent.trim();
+      const willBeIdle = !checkboxElement.classList.contains('checked');
 
       try {
-        const res = await fetch(`/api/games/${appId}/toggle`, {
+        const res = await fetch(`/api/games/${appIdValue}/toggle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idle: willBeIdle }),
@@ -199,8 +212,8 @@
 
         const { ok } = await res.json();
         if (ok) {
-          checkbox.classList.toggle('checked', willBeIdle);
-          row.classList.toggle('checked', willBeIdle);
+          checkboxElement.classList.toggle('checked', willBeIdle);
+          gameRowElement.classList.toggle('checked', willBeIdle);
           refreshGameRowStatus();
         }
       } catch (err) {
@@ -209,15 +222,15 @@
     });
 
     // handle start/stop idle session button
-    toggleBtn.addEventListener('click', async () => {
-      const endpoint = sessionActive ? '/api/session/stop' : '/api/session/start';
+    toggleSessionBtnElement.addEventListener('click', async () => {
+      const endpoint = idleSessionActive ? '/api/session/stop' : '/api/session/start';
 
       try {
         const res = await fetch(endpoint, { method: 'POST' });
         const { ok, reason } = await res.json();
 
         if (ok) {
-          sessionActive = !sessionActive;
+          idleSessionActive = !idleSessionActive;
           refreshGameRowStatus();
         } else {
           console.warn('session toggle failed:', reason);
@@ -228,8 +241,8 @@
     });
 
     // handle clear list button
-    clearBtn.addEventListener('click', async () => {
-      if (sessionActive) {
+    clearBtnElement.addEventListener('click', async () => {
+      if (idleSessionActive) {
         return;
       }
 
@@ -242,7 +255,7 @@
 
         const { ok } = await res.json();
         if (ok) {
-          gameList.innerHTML = '';
+          gameListElement.innerHTML = '';
         }
       } catch (err) {
         console.error('failed to clear games.json file:', err);
@@ -250,7 +263,7 @@
     });
 
     // handle close button
-    closeBtn.addEventListener('click', async () => {
+    shutdownBtnElement.addEventListener('click', async () => {
       if (!confirm('shutdown the bot and the web server?')) {
         return;
       }
@@ -263,38 +276,38 @@
 
     // handle modal
     const openModal = () => {
-      modalOverlay.classList.add('open');
-      modalOverlay.setAttribute('aria-hidden', 'false');
-      modalError.textContent = '';
-      inputAppId.value = '';
-      inputName.value = '';
-      inputAppId.focus();
+      modalElement.classList.add('open');
+      modalElement.setAttribute('aria-hidden', 'false');
+      modalErrorElement.textContent = '';
+      inputAppIdElement.value = '';
+      inputNameElement.value = '';
+      inputAppIdElement.focus();
     };
 
     const closeModal = () => {
-      modalOverlay.classList.remove('open');
-      modalOverlay.setAttribute('aria-hidden', 'true');
+      modalElement.classList.remove('open');
+      modalElement.setAttribute('aria-hidden', 'true');
     };
 
-    addBtn.addEventListener('click', openModal);
-    modalClose.addEventListener('click', closeModal);
+    addBtnElement.addEventListener('click', openModal);
+    modalCloseBtnElement.addEventListener('click', closeModal);
 
     // close on overlay backdrop click
-    modalOverlay.addEventListener('click', (event) => {
-      if (event.target === modalOverlay) {
+    modalElement.addEventListener('click', (event) => {
+      if (event.target === modalElement) {
         closeModal();
       }
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && modalOverlay.classList.contains('open')) {
+      if (event.key === 'Escape' && modalElement.classList.contains('open')) {
         closeModal();
       }
     });
 
     // fetch game row template file
     let rowTemplate = null;
-    const getRowTemplate = async () => {
+    const getGameRowTemplate = async () => {
       if (rowTemplate) {
         return rowTemplate;
       } 
@@ -307,7 +320,7 @@
     // inject a newly added game row into the 
     // list without a full page reload
     const appendGameRow = async (game) => {
-      const template = await getRowTemplate();
+      const template = await getGameRowTemplate();
       const html = template
         .replace('{{ROW_CHECKED_CLASS}}', '')
         .replace('{{CHECKBOX_CHECKED_CLASS}}', '')
@@ -317,44 +330,44 @@
         .replace('{{STATUS_LABEL}}', 'not idling')
         .replace('{{STATUS_DOT_CLASS}}', 'stopped');
 
-      const row = document.createElement('div');
-      row.innerHTML = html.trim();
-      gameList.appendChild(row.firstElementChild);
+      const gameRow = document.createElement('div');
+      gameRow.innerHTML = html.trim();
+      gameListElement.appendChild(gameRow.firstElementChild);
       refreshGameRowStatus();
     };
 
-    modalSubmit.addEventListener('click', async () => {
-      const appId = parseInt(inputAppId.value.trim(), 10);
-      const name = inputName.value.trim();
+    modalSubmitBtnElement.addEventListener('click', async () => {
+      const appIdValue = parseInt(inputAppIdElement.value.trim(), 10);
+      const gameName = inputNameElement.value.trim();
 
-      if (!appId || appId <= 0) {
-        modalError.textContent = 'enter a valid app id';
+      if (!appIdValue || appIdValue <= 0) {
+        modalErrorElement.textContent = 'enter a valid app id';
         return;
       }
-      if (!name) {
-        modalError.textContent = 'enter a name for the game (can be anything)';
+      if (!gameName) {
+        modalErrorElement.textContent = 'enter a name for the game (can be anything)';
         return;
       }
 
-      modalError.textContent = '';
+      modalErrorElement.textContent = '';
 
       try {
         const res = await fetch('/api/games/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: appId, name }),
+          body: JSON.stringify({ id: appIdValue, name: gameName }),
         });
         const { ok, reason } = await res.json();
 
         if (!ok) {
-          modalError.textContent = reason;
+          modalErrorElement.textContent = reason;
           return;
         }
 
-        await appendGameRow({ id: appId, name });
+        await appendGameRow({ id: appIdValue, name: gameName });
         closeModal();
       } catch (err) {
-        modalError.textContent = 'failed to add game.';
+        modalErrorElement.textContent = 'failed to add game.';
         console.error('failed to add game:', err);
       }
     });
